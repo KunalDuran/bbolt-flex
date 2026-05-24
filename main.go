@@ -155,6 +155,7 @@ type Server struct{ store *Store }
 //   GET    /collections                       -> list collection names
 //   GET    /collections/{c}                   -> all records in {c}
 //   POST   /collections/{c}                   -> body: {"key":"...", "value": <any json>}
+//   DELETE /collections/{c}                   -> delete record by key (query param ?key=... or body {"key": "..."})
 //   GET    /collections/{c}/{key}             -> single record
 //   PUT    /collections/{c}/{key}             -> replace; body is the value (any json)
 //   DELETE /collections/{c}/{key}             -> delete
@@ -252,8 +253,34 @@ func (s *Server) handleCollection(w http.ResponseWriter, r *http.Request, collec
 			"value":      body.Value,
 		})
 
+	case http.MethodDelete:
+		key := r.URL.Query().Get("key")
+		if key == "" && r.Body != nil {
+			var body struct {
+				Key string `json:"key"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			key = body.Key
+		}
+
+		if strings.TrimSpace(key) == "" {
+			writeError(w, http.StatusBadRequest, "'key' query parameter or request body is required")
+			return
+		}
+
+		err := s.store.Delete(collection, key)
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrCollectionGone) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+
 	default:
-		w.Header().Set("Allow", "GET, POST")
+		w.Header().Set("Allow", "GET, POST, DELETE")
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
