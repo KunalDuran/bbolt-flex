@@ -356,10 +356,9 @@ func main() {
 	defer store.Close()
 
 	srv := &Server{store: store}
-	addr := ":8080"
+	addr := ":8081"
 	log.Printf("listening on %s (db=%s)", addr, dbFile)
 	if err := http.ListenAndServe(addr, corsMiddleware(srv.routes())); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }
-
